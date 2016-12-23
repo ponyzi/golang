@@ -1,18 +1,23 @@
 package main
 
+
 import (
         //"bufio"
         //"container/list"
         "golang.org/x/crypto/ssh"
-        //"encoding/csv"
+        "regexp"
         "fmt"
-        //"io"
+        "io/ioutil"
         //"os"
-        //"strings"
+        "strings"
         "bytes"
         "log"
         "time"
 )
+
+/*
+host 文件格式： ip  [port]  user passwd
+*/
 
 type printOut struct {
         dest      string
@@ -27,7 +32,7 @@ type hostInfo struct {
 }
 
 func OneSsh(destInfo hostInfo, cmd string, resultChan chan printOut) {
-        // hostInfo [ip[:port],user, passwd]
+        
         config := &ssh.ClientConfig{
                 User: destInfo.user,
                 Auth: []ssh.AuthMethod{
@@ -72,13 +77,41 @@ func MultiSsh(hostInfos []hostInfo, cmd string) []printOut {
         return result
 }
 
-func main() {
-        hosts := []hostInfo{
-                hostInfo{"10.157.0.xxx","22","uuu","pppppp"},
-                hostInfo{"10.157.xxx.xx","22","uuu","pppppp"},
-                hostInfo{"10.157.xxx.xx","22","uuu","pppppp"},
-                hostInfo{"10.157.xxx.xxx","22","uuu","pppppp"},
+func GetHosts(lines []string) []hostInfo {
+        var hosts []hostInfo
+        for _, line := range lines {
+                infos := MatchOneHostInfo(line)
+                if len(infos) < 9 {
+                        continue
+                }
+                host := hostInfo{ip: infos[1], port: infos[6], user: infos[7], passwd: infos[8]}
+                hosts = append(hosts, host)
         }
+        return hosts
+}
+
+func MatchOneHostInfo(line string) []string {
+
+        r, err := regexp.Compile(`((([12][0-9][0-9]|[1-9][0-9]|[0-9])\.){3,3}([12][0-9][0-9]|[1-9][0-9]|[0-9]))(\s+(\d+))?\s+(.*)\s+(.*)\b`)
+        checkErr(err)
+        // 匹配内容列表，包含了子串，正常的话 ar[1]:ip,ar[6]:port,ar[7]:user,ar[8]:passwd
+        ar := r.FindStringSubmatch(line)
+        fmt.Println(ar)
+        for i, v := range ar {
+                fmt.Println(i, ":", v)
+        }
+        return ar
+}
+
+func ReadHostFile(filename string) []string {
+        dat, err := ioutil.ReadFile(filename) 
+        checkErr(err)
+        lines := strings.Split(string(dat), "\n")
+        return lines
+}
+func main() {
+        destLines:=ReadHostFile("host")
+        hosts:=GetHosts(destLines)
         results := MultiSsh(hosts,"uptime")
         fmt.Println(results)
 }
